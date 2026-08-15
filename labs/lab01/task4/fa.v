@@ -1,4 +1,3 @@
-
 module fa(input a,b,cin,
           output reg sum,cout);
 
