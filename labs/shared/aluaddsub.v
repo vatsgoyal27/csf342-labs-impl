@@ -3,7 +3,7 @@
 module aluaddsub (
     input  signed [31:0] a,
     input  signed [31:0] b,
-    input                m,     // 0 = Add, 1 = Subtract
+    input                m,     // 0 = subtract, 1 = add
     output signed [31:0] sum,
     output               pos_ovf, // Positive Overflow
     output               neg_ovf  // Negative Overflow
@@ -12,8 +12,8 @@ module aluaddsub (
     wire        [32:0] c;
     wire signed [31:0] sum_raw;
 
-    assign b_mod = b ^ {32{m}};
-    assign c[0]  = m;
+    assign b_mod = b ^ {32{~m}};
+    assign c[0]  = ~m;
 
     genvar i;
     generate
