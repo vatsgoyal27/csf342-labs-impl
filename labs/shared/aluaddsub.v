@@ -6,7 +6,8 @@ module aluaddsub (
     input                m,     // 0 = subtract, 1 = add
     output signed [31:0] sum,
     output               pos_ovf, // Positive Overflow
-    output               neg_ovf  // Negative Overflow
+    output               neg_ovf,  // Negative Overflow
+    output               c_out
 );
     wire signed [31:0] b_mod;
     wire        [32:0] c;
@@ -27,5 +28,6 @@ module aluaddsub (
     assign #3 sum     = sum_raw;
     assign #3 pos_ovf = (~c[31]) & c[32]; // Cin into MSB is 0, Cout from MSB is 1
     assign #3 neg_ovf = c[31] & (~c[32]); // Cin into MSB is 1, Cout from MSB is 0
+    assign #3 c_out = c[32];
 
 endmodule
