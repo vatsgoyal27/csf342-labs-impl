@@ -1,5 +1,5 @@
 `timescale 1ns/1ps
-module dut (
+module dff (
     input wire clk,
     input wire d,
     input wire reset_n, // Active-low reset input
