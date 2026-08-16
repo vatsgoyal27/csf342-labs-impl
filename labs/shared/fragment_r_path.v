@@ -1,3 +1,5 @@
+`timescale 1ns/1ps
+
 module fragment_r_path(input [31:0] inst, input clk, input reset, output [31:0] alu_result);
     wire [6:0] funct7;
     wire [2:0] funct3;
