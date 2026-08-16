@@ -23,5 +23,5 @@ module rv32ialu(input signed [31:0] A, input signed [31:0] B, input [2:0] alu_ct
         endcase
     end
     assign #1 Y = out_reg;
-    assign zero = (Y == 32'b0);
+    assign #1 zero = (Y == 32'b0);
 endmodule
