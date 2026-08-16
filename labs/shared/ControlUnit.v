@@ -30,6 +30,8 @@ always @(*) begin
             RegWrite = 1;
             ALUSrcA  = 2'b00; // rs1
             ALUSrcB  = 0;     // rs2
+            PCSrc = 0;
+            jal_sel = 0;
             case(func3)
                 3'b000: ALUOp = (func7[5]) ? 3'b000 : 3'b001; // SUB : ADD
                 3'b001: ALUOp = 3'b100; // SLL
@@ -48,6 +50,8 @@ always @(*) begin
             ALUSrcB  = 1;
             ImmSel   = 3'b000; // imm_i
             ALUOp    = 3'b001; // ADD
+            PCSrc = 0;
+            jal_sel = 0;
         end
 
         // I-type: Immediate Arithmetic
@@ -56,6 +60,8 @@ always @(*) begin
             ALUSrcA  = 2'b00; // rs1
             ALUSrcB  = 1;
             ImmSel   = 3'b000; // imm_i
+            PCSrc = 0;
+            jal_sel = 0;
             case(func3)
                 3'b000: ALUOp = 3'b001; // ADDI
                 3'b110: ALUOp = 3'b011; // ORI
@@ -72,6 +78,8 @@ always @(*) begin
             ALUSrcB  = 1;
             ImmSel   = 3'b011; // imm_s
             ALUOp    = 3'b001; // ADD
+            PCSrc = 0;
+            jal_sel = 0;
         end
 
         // B-type: Branch
@@ -81,6 +89,7 @@ always @(*) begin
             ALUSrcB  = 1;     // imm (kept as in your original; comparator handled outside ALU)
             ImmSel   = 3'b010; // imm_b
             ALUOp    = 3'b001; // ADD
+            jal_sel = 0;
             case(func3)
                 3'b000: PCSrc = beq;
                 3'b001: PCSrc = bne;
@@ -106,6 +115,8 @@ always @(*) begin
             ALUSrcB  = 1;     // imm_u
             ImmSel   = 3'b100;
             ALUOp    = 3'b001; // ADD -> 0 + imm_u
+            PCSrc = 0;
+            jal_sel = 0;
         end
 
         // U-type: AUIPC
@@ -115,6 +126,8 @@ always @(*) begin
             ALUSrcB  = 1;     // imm_u
             ImmSel   = 3'b100;
             ALUOp    = 3'b001; // ADD -> PC + imm_u
+            PCSrc = 0;
+            jal_sel = 0;
         end
 
         default: begin

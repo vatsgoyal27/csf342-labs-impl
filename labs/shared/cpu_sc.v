@@ -1,30 +1,13 @@
-module cpu_sc(
-    input clk,
-    input reset
+module CPU_sc(
+    input clk,reset
 );
 
-// -----------------------------------------------------------------------------
-// Internal Wires & Registers
-// -----------------------------------------------------------------------------
-reg  [31:0] PC;
+wire [31:0] instruction;
+reg [31:0] PC;
 wire [31:0] nextPC;
 wire [31:0] PC_4;
-wire [31:0] instruction;
 
-wire [31:0] read_data1, read_data2;
-wire [31:0] immOut;
-wire [31:0] writeBack;
-
-wire RegWrite, MemWrite, MemRead, ALUSrc;
-wire [1:0] ALUSrcA; // 00: rs1, 01: PC (AUIPC), 10: 0 (LUI)
-wire [2:0] ALUOp;
-wire [2:0] ImmSel;
-wire PCSrc, jal_sel;
-wire beq, bne;
-
-// -----------------------------------------------------------------------------
-// 1. Fetch Stage
-// -----------------------------------------------------------------------------
+// fetch
 BankedMEM IMEM(
     .writeEn(1'b0),
     .clk(clk),
@@ -39,92 +22,123 @@ PCInc pcinc(
     .newPC(PC_4)
 );
 
-always @(posedge clk or posedge reset) begin
-    if (reset) begin 
-        PC <= 32'b0;
-    end else begin
-        PC <= nextPC;
-    end
-end
-
-// -----------------------------------------------------------------------------
-// 2. Control & Decode Stage
-// -----------------------------------------------------------------------------
-branch_comp bc(
-    .rs1(read_data1),
-    .rs2(read_data2),
-    .beq(beq),
-    .bne(bne)
-);
+wire RegWrite;
+wire MemRead;
+wire MemWrite;
+wire [2:0] ALUOp;
+wire [2:0] ImmSel;
+wire [1:0] ALUSrcA;
+wire ALUSrcB;
+wire bne,beq;
+wire PCSrc; 
+wire jal_sel;
+// decode
 
 ControlUnit ctrlunit(
     .instruction(instruction),
     .bne(bne),
     .beq(beq),
     .RegWrite(RegWrite),
-    .MemWrite(MemWrite),
     .MemRead(MemRead),
+    .MemWrite(MemWrite),
     .ALUOp(ALUOp),
-    .ImmSel(ImmSel),
     .ALUSrcA(ALUSrcA),
-    .ALUSrcB(ALUSrc),
+    .ALUSrcB(ALUSrcB),
+    .ImmSel(ImmSel),
     .PCSrc(PCSrc),
     .jal_sel(jal_sel)
 );
 
-immGen IMM_gen(
+wire [31:0] immOut;
+immGen immgen(
     .instruction(instruction),
     .immSel(ImmSel),
     .immOut(immOut)
 );
 
+
+wire [31:0] writeBack,read_data1,read_data2;
 reg_file regfie(
     .clk(clk),
     .reset(reset),
     .we(RegWrite),
     .w_addr(instruction[11:7]),
-    .data_in(writeBack),
     .read_1(instruction[19:15]),
     .read_2(instruction[24:20]),
+    .data_in(writeBack),
     .rdata1(read_data1),
     .rdata2(read_data2)
 );
 
-// -----------------------------------------------------------------------------
-// 3. Execution Stage
-// -----------------------------------------------------------------------------
-// MUX for ALU Operand B (Register rs2 vs Immediate)
-wire [31:0] ALUin_B = ALUSrc ? immOut : read_data2;
-
-// MUX for ALU Operand A (Register rs1 vs PC vs Zero)
-wire [31:0] ALUin_A = (ALUSrcA == 2'b01) ? PC :
-                      (ALUSrcA == 2'b10) ? 32'b0 :
-                                           read_data1;
-
-wire [31:0] ALUout;
-
-rv32ialu ALU(
-    .A(ALUin_A),
-    .B(ALUin_B),
-    .alu_ctrl(ALUOp),
-    .Y(ALUout),
-    .zero()
+branch_comp bc(
+    .rs1(read_data1),
+    .rs2(read_data2),
+    .bne(bne),
+    .beq(beq)
 );
 
-// -----------------------------------------------------------------------------
-// 4. PC Target Calculation & Next PC Selection
-// -----------------------------------------------------------------------------
-wire [31:0] target_pc = PC + immOut;
+// execute
+wire [31:0] ALUin,ALUout;
+genvar j;
+generate for(j = 0;j<32;j++) begin : ALU_inLoop1
+    mux2to1 MUX_IMM(
+        .a(read_data2[j]),
+        .b(immOut[j]),
+        .sel(ALUSrcB),
+        .out(ALUin[j])
+    );
+end
+endgenerate
 
-// Next PC selection: Jump target if JAL or taken Branch, else sequential PC + 4
-wire pc_sel = PCSrc || jal_sel;
-assign nextPC = pc_sel ? target_pc : PC_4;
+wire [31:0] ALUin_rs1_pc;
+genvar t;
+generate for(t = 0;t<32;t++) begin : ALU_inLoop
+    mux2to1 MUX_PC(
+        .a(read_data1[t]),
+        .b(PC[t]),
+        .sel(ALUSrcA[0]),
+        .out(ALUin_rs1_pc[t])
+    );
+end
+endgenerate
 
-// -----------------------------------------------------------------------------
-// 5. Memory Access & Write-Back Stage
-// -----------------------------------------------------------------------------
+wire [31:0] ALUin_1;
+genvar m;
+generate for(m = 0;m<32;m++) begin : ALU_inLoop2
+    mux2to1 MUX_ZERO(
+        .a(ALUin_rs1_pc[m]),
+        .b(1'b0),
+        .sel(ALUSrcA[1]),
+        .out(ALUin_1[m])
+    );
+end
+endgenerate
+
+rv32ialu ALU(
+    .A(ALUin_1),
+    .B(ALUin),
+    .alu_ctrl(ALUOp),
+    .Y(ALUout)
+);
+
+genvar l;
+generate 
+    for (l = 0; l<32;l++) begin: mux_loop
+    mux2to1 m1(.a(PC_4[l]),.b(ALUout[l]),.sel(PCSrc),.out(nextPC[l]));
+end
+endgenerate
+
+always @(posedge clk) begin
+    if(reset) begin 
+        PC <= 0;
+    end
+    else begin
+        PC <= nextPC;
+    end
+end
+
+// memory access
 wire [31:0] readDataMem;
-
 BankedMEM DMEM(
     .writeEn(MemWrite),
     .clk(clk),
@@ -133,10 +147,29 @@ BankedMEM DMEM(
     .readData(readDataMem)
 );
 
-// MUX 1: Memory Read Data vs ALU Result
-wire [31:0] writeBack_1 = MemRead ? readDataMem : ALUout;
+//write back
+wire [31:0] writeBack_1;
+genvar k;
+generate 
+    for(k = 0;k<32;k++) begin : Write_back_loop1
+    mux2to1 MUX_MEM(
+        .b(readDataMem[k]),
+        .a(ALUout[k]),
+        .sel(MemRead),
+        .out(writeBack_1[k])
+    );
+end
+endgenerate
 
-// MUX 2: Final Write-back Data (PC + 4 for JAL return address, else writeBack_1)
-assign writeBack = jal_sel ? PC_4 : writeBack_1;
+genvar z;
+generate for(z=0;z<32;z++) begin : Write_back_loop
+    mux2to1 MUX_WB(
+        .b(PC_4[z]),
+        .a(writeBack_1[z]),
+        .sel(jal_sel),
+        .out(writeBack[z])
+    );
+end
+endgenerate
 
 endmodule
